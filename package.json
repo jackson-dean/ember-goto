@@ -11,14 +11,41 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:extension.sayHello"
+        "onCommand:extension.emberGoTo"
     ],
     "main": "./out/extension",
     "contributes": {
         "commands": [{
-            "command": "extension.sayHello",
-            "title": "Hello World"
-        }]
+            "command": "extension.emberGoTo",
+            "title": "Ember: Go To"
+        }],
+        "menus": {
+            "editor/context": [{
+                "command": "extension.emberGoTo",
+                "group": "navigation"
+            }]   
+        },
+        "keybindings": [{
+            "command": "extension.emberGoTo",
+            "key": "ctrl+g ctrl+t",
+            "mac": "cmd+g cmd+t"
+        }],
+        "configuration": {
+            "type": "object",
+            "title": "Ember Go To Configuration",
+            "properties": {
+                "ember-goto.projectRoot": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Absolute path to the project root"
+                },
+                "ember-goto.searchSources": {
+                    "type": "array",
+                    "default": [],
+                    "description": "List of project specific search directories relative to the project root"
+                }
+            }
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run compile",
