@@ -31,5 +31,5 @@ Not published in the marketplace yet, but it can be easily installed by
 downloading the .vsix file from this repo and using the `code` command line
 utility by running the following in a terminal:
 ```
-git clone git@github.com:jackson-dean/ember-goto.git && cd ember-goto && code --install-extension ember-goto-0.0.1.vsix
+git clone https://github.com/jackson-dean/ember-goto.git && cd ember-goto && code --install-extension ember-goto-0.0.1.vsix
 ```
