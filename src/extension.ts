@@ -11,84 +11,63 @@ const pathSeparator = '/';
 // TODO: investigate if we can allow a regex in config to specify how to inject the segments?
 const injectPathSegments = [
     'addon',
-    'app',
     'addon-test-support'
 ];
 
-const fileExtensions = [
-    'hbs',
-    'js',
-];
-
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "ember-goto" is now active!');
-
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with  registerCommand
-    // The commandId parameter must match the command field in package.json
     let disposable = vscode.commands.registerCommand('extension.emberGoTo', () => {
-        // The code you place here will be executed every time your command is executed
-
         const { activeTextEditor } = vscode.window;
         if (activeTextEditor) {
             const { line: currentCursorLineNumber, character: currentCursorColumnNumber } = activeTextEditor.selection.active;
             const lineOfTextAtCursor = activeTextEditor.document.lineAt(currentCursorLineNumber).text;
             const currentFileName = activeTextEditor.document.fileName;
             let existingFiles: Object[] = [];
-            let moduleNamesUnderCursor: string[] = [];
+            const maybeModuleName = transformNamespaceAlias(getModuleNameUnderCursor(currentFileName, lineOfTextAtCursor, currentCursorColumnNumber));
 
-            if (isHbsFile(currentFileName)) {
-                const componentNameUnderCursor = getComponentNameUnderCursor(lineOfTextAtCursor, currentCursorColumnNumber);
-                moduleNamesUnderCursor = convertComponentNameToModulePair(componentNameUnderCursor, currentFileName);
-            }
+            if (isValidModuleName(maybeModuleName) && isNamespacedModule(maybeModuleName)) {
+                const { searchSources, projectRoot } = vscode.workspace.getConfiguration("ember-goto");
+                const workspaceRootPath = projectRoot || vscode.workspace.rootPath || '';
+                const baseFileNameCandidates = getBaseFileNameCandidates(injectPathSegments, maybeModuleName);
 
-            if (isJavascriptFile(currentFileName)) {
-                moduleNamesUnderCursor = [getModuleNameUnderCursor(lineOfTextAtCursor, currentCursorColumnNumber)];
-            }
+                existingFiles = searchSources.reduce((existingFiles: Array<Object>, currentSearchDirectory: string) => {
 
-            existingFiles = moduleNamesUnderCursor.reduce((result: Array<Object>, moduleNameUnderCursor: string) => {
-                if (isValidModuleName(moduleNameUnderCursor) && isResolvableModule(moduleNameUnderCursor)) {
-                    const { searchSources, projectRoot } = vscode.workspace.getConfiguration("ember-goto");
-                    const workspaceRootPath = projectRoot || vscode.workspace.rootPath || '';
+                    const allEixistingFilesUnderSearchDir = baseFileNameCandidates.reduce((existingUnderSearchSrc: Array<Object>, currentBaseFileName: string) => {
+                        const [cleanWorkspaceRoot, cleanSearchDir, cleanBaseFileName] = [workspaceRootPath, currentSearchDirectory, currentBaseFileName].map(cleanPathSegment);
+                        // TODO: remove handleNonConventionalNaming wrapper once "s-base" is gone
+                        // Make this a config item which maps the "on disk" directory name to the ember namespace
+                        const existingFileCandidate = `${cleanWorkspaceRoot}/${cleanSearchDir}/${cleanBaseFileName}`;
 
-                    const baseFileNameCandidates = injectPathSegments.map(segment => {
-                        const [namespace, ...rest] = moduleNameUnderCursor.split(pathSeparator);
-                        // NOTE: We remove test-support so we can properly inject the real location which is "addon-test-support"
-                        const cleanRest = rest.join(pathSeparator).replace('test-support', '');
-                        return `${namespace}${pathSeparator}${segment}${pathSeparator}${cleanRest}`;
-                    });
-
-                    const foundFiles = searchSources.reduce((outerResult: Array<Object>, currentSearchDirectory: string) => {
-
-                        const allEixistingFilesUnderSearchDir = baseFileNameCandidates.reduce((innerResult: Array<Object>, currentBaseFileName: string) => {
-
-                            const existingFiles = fileExtensions.reduce((inner: Array<Object>, currentExtension: string) => {
-                                const [cleanWorkspaceRoot, cleanSearchDir, cleanBaseFileName] = [workspaceRootPath, currentSearchDirectory, currentBaseFileName].map(cleanPathSegment);
-                                // TODO: remove handleNonConventionalNaming wrapper once "s-base" is gone
-                                // Make this a config item which maps the "on disk" directory name to the ember namespace
-                                const fileCandidate = `${cleanWorkspaceRoot}/${cleanSearchDir}/${handleNonConventionalNaming(cleanBaseFileName)}.${currentExtension}`;
-                                return existsSync(fileCandidate) ? [...inner, {
-                                    [`${currentExtension === 'hbs' ? 'HBS' : 'JS'}: ${cleanSearchDir}/${currentBaseFileName}`]: fileCandidate,
-                                }] : inner;
-                            }, []);
-
-                            return [...innerResult, ...existingFiles];
-                        }, []);
-
-                        return [...outerResult, ...allEixistingFilesUnderSearchDir];
+                        // TODO: clean this gross shit up
+                        if (existsSync(existingFileCandidate)) {
+                            return [...existingUnderSearchSrc, {
+                                [`${cleanSearchDir}/${currentBaseFileName}`]: existingFileCandidate
+                            }];
+                        } else if (isHbsFile(existingFileCandidate)) {
+                            const reexportPath = existingFileCandidate.replace('/templates/', pathSeparator).replace('.hbs', '.js');
+                            // if a template file doesn't exist, it could be a case of re-exporting a template from js
+                            if (existsSync(reexportPath)) {
+                                return [...existingUnderSearchSrc, {
+                                    [`${cleanSearchDir}/${currentBaseFileName}`]: reexportPath
+                                }];
+                            // or it could be a template helper!
+                            } else {
+                                const helperPath = existingFileCandidate.replace('/templates/components/', '/helpers/').replace('.hbs', '.js');
+                                if (existsSync(helperPath)) {
+                                    return [...existingUnderSearchSrc, {
+                                        [`${cleanSearchDir}/${currentBaseFileName}`]: helperPath
+                                    }];
+                                }
+                            }
+                        }
+                        return existingUnderSearchSrc;
                     }, []);
-                    return [...result, ...foundFiles];
-                }
-                return result;
-            }, []);
+
+                    return [...existingFiles, ...allEixistingFilesUnderSearchDir];
+                }, []);
+            }
 
             if (existingFiles.length === 0) {
-                vscode.window.showErrorMessage('Could not locate module');
+                vscode.window.showErrorMessage(`Could not locate module: ${maybeModuleName}`);
                 return;
             }
 
@@ -142,19 +121,34 @@ function isHbsFile(fileName: string): boolean {
     return getFileExtension(fileName) === 'hbs';
 }
 
-function isResolvableModule(fileName: string): boolean {
+function isNamespacedModule(fileName: string): boolean {
     return fileName.indexOf('.') !== 0;
 }
 
-function isValidModuleName(fileName: string): boolean {
-    return fileNameRegex.test(fileName);
+function isValidModuleName(moduleName: string): boolean {
+    return fileNameRegex.test(moduleName);
 }
 
 function cleanPathSegment(segment: string): string {
     return segment.replace(/\/$/, '');
 }
 
-function getModuleNameUnderCursor(currentLine: string, cursorIdx: number): string {
+function getModuleNameUnderCursor(fileName: string, textLine: string, cursorPosition: number): string {
+    if (isHbsFile(fileName)) {
+        const componentNameUnderCursor = getComponentNameUnderCursor(textLine, cursorPosition);
+        return convertComponentNameToModuleName(componentNameUnderCursor, fileName).concat('.hbs');
+    }
+
+    if (isJavascriptFile(fileName)) {
+        const moduleName = convertImportStringToModuleName(textLine, cursorPosition);
+        const isTemplateImport = moduleName.includes('/templates/');
+        return isTemplateImport ? moduleName.concat('.hbs') : moduleName.concat('.js');
+    }
+
+    return '';
+}
+
+function convertImportStringToModuleName(currentLine: string, cursorIdx: number): string {
     const textAfterCursor = currentLine.substring(cursorIdx);
     const textBeforeCursor = currentLine.substring(0, cursorIdx);
     const endOfFileNameIdx = textAfterCursor.search(stringTerminatorRegex);
@@ -169,10 +163,10 @@ function getModuleNameUnderCursor(currentLine: string, cursorIdx: number): strin
 function getComponentNameUnderCursor(currentLine: string, cursorIdx: number): string {
     const textAfterCursor = currentLine.substring(cursorIdx);
     const textBeforeCursor = currentLine.substring(0, cursorIdx);
-    // FIXME: cache the search so we don't do it twice
-    const endOfComponentNameIdx = textAfterCursor.search(/\s+/) !== -1 ? textAfterCursor.search(/\s+/) : textAfterCursor.length;
+    const whiteSpaceDelimiterIdx = textAfterCursor.search(/\s+/);
+    const endOfComponentNameIdx = whiteSpaceDelimiterIdx !== -1 ? whiteSpaceDelimiterIdx : textAfterCursor.length;
     const reversedSegment = textBeforeCursor.split('').reverse().join('');
-    const startOfComponentNameIdx = reversedSegment.search(/[#{]/);
+    const startOfComponentNameIdx = reversedSegment.search(/[#{(]/);
     const fileNameStart = reversedSegment.substring(0, startOfComponentNameIdx).split('').reverse().join('');
     const fileNameEnd = textAfterCursor.substring(0, endOfComponentNameIdx);
 
@@ -180,39 +174,41 @@ function getComponentNameUnderCursor(currentLine: string, cursorIdx: number): st
     return fileNameStart.concat(fileNameEnd).replace(/^\/|}+$/g, '');;
 }
 
-// A component might be hbs+js, js only, or hbs only
-function convertComponentNameToModulePair(componentName: string, currentFileName: string): Array<string> {
-    // component invocations can be namespaced with "::""
-    const hasNameSpace = componentName.includes('::');
-    if (hasNameSpace) {
-        const normalizedComponentName = componentName.replace(/::/, pathSeparator);
-        const [namespace, ...rest] = normalizedComponentName.split(pathSeparator);
-
-        return [
-            `${namespace}${pathSeparator}templates${pathSeparator}components${pathSeparator}${rest.join(pathSeparator)}`,
-            `${namespace}${pathSeparator}components${pathSeparator}${rest.join(pathSeparator)}`,
-        ]
-    } else {
-        const currentFileNameParts = currentFileName.split(pathSeparator);
-        const componentNameParts = componentName.split(pathSeparator);
-        let namespace = '';
-
-        for (let i = currentFileNameParts.length - 1; i > 0; i--) {
-            if (/addon/.test(currentFileNameParts[i])) {
-                namespace = currentFileNameParts[i - 1];
-                break;
-            }
-        }
-
-        // FIXME: this is very similar to the return in the hasNameSpace branch.
-        return [
-            `${namespace}${pathSeparator}templates${pathSeparator}components${pathSeparator}${componentNameParts.join(pathSeparator)}`,
-            `${namespace}${pathSeparator}components${pathSeparator}${componentNameParts.join(pathSeparator)}`,
-        ]
-    }
+function convertComponentNameToModuleName(componentName: string, currentFileName: string): string {
+    const namespace = getComponentNameSpace(componentName, currentFileName);
+    // strip namespace if it exists
+    const cleanComponentName = componentName.replace(/^.*::/, '');
+    // NOTE: should this also consider js only components?
+    return `${namespace}${pathSeparator}templates${pathSeparator}components${pathSeparator}${cleanComponentName}`;
 }
 
-function handleNonConventionalNaming(componentName: string) {
+function getComponentNameSpace(componentName: string, fileName: string): string {
+    const hasNameSpace = componentName.includes('::');
+
+    if (hasNameSpace) {
+        return componentName.split('::')[0];
+    }
+
+    const fileNameParts = fileName.split(pathSeparator);
+    for (let i = fileNameParts.length - 1; i > 0; i--) {
+        if (/addon/.test(fileNameParts[i])) {
+            return fileNameParts[i - 1];
+        }
+    }
+
+    return '';
+}
+
+function getBaseFileNameCandidates(injectPathSegments: Array<string>, moduleName: string): Array<string> {
+    return injectPathSegments.map(segment => {
+        const [namespace, ...rest] = moduleName.split(pathSeparator);
+        // NOTE: We remove test-support so we can properly inject the real location which is "addon-test-support"
+        const cleanRest = rest.join(pathSeparator).replace('test-support', '');
+        return `${namespace}${pathSeparator}${segment}${pathSeparator}${cleanRest}`;
+    });
+}
+
+function transformNamespaceAlias(componentName: string) {
     if (componentName.indexOf('shared') === 0) {
         return componentName.replace(/^shared/, 's-base');
     }

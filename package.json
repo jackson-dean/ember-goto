@@ -17,7 +17,7 @@
     "contributes": {
         "commands": [{
             "command": "extension.emberGoTo",
-            "title": "Ember: Go To"
+            "title": "Ember: Go To File"
         }],
         "menus": {
             "editor/context": [{
