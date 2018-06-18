@@ -75,7 +75,10 @@ export function activate(context: vscode.ExtensionContext) {
             // in the current editor
             if (existingFiles.length === 1) {
                 const fileKey = Object.keys(existingFiles[0])[0];
-                vscode.workspace.openTextDocument(existingFiles[0][fileKey] || '').then(textDocument => {
+                const file = existingFiles[0];
+                const displayName: string = (<any>file)[fileKey];
+
+                vscode.workspace.openTextDocument(displayName).then(textDocument => {
                     vscode.window.showTextDocument(textDocument);
                 });
                 return;
@@ -95,7 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
                     return existingFile[pickedFile];
                 }) || {};
 
-                const realFileName: string = fileToOpen[pickedFile] || '';
+                const realFileName: string = (<any>fileToOpen)[pickedFile] || '';
 
                 vscode.workspace.openTextDocument(realFileName).then(textDocument => {
                     vscode.window.showTextDocument(textDocument);
