@@ -33,11 +33,8 @@ export function activate(context: vscode.ExtensionContext) {
 
                     const allEixistingFilesUnderSearchDir = baseFileNameCandidates.reduce((existingUnderSearchSrc: Array<Object>, currentBaseFileName: string) => {
                         const [cleanWorkspaceRoot, cleanSearchDir, cleanBaseFileName] = [workspaceRootPath, currentSearchDirectory, currentBaseFileName].map(cleanPathSegment);
-                        // TODO: remove handleNonConventionalNaming wrapper once "s-base" is gone
-                        // Make this a config item which maps the "on disk" directory name to the ember namespace
                         const existingFileCandidate = `${cleanWorkspaceRoot}/${cleanSearchDir}/${cleanBaseFileName}`;
 
-                        // TODO: clean this gross shit up
                         if (existsSync(existingFileCandidate)) {
                             return [...existingUnderSearchSrc, {
                                 [`${cleanSearchDir}/${currentBaseFileName}`]: existingFileCandidate
