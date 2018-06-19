@@ -32,21 +32,21 @@ Example config:
 
 ## Install
 
-Not published in the marketplace yet, but it can be easily installed by
-downloading the .vsix file from this repo and using the `code` command line
-utility.
+Not published in the marketplace yet, but it can be easily installed by  
+downloading the .vsix file from this repo and using the `code` command line  
+utility.  
 
-First, you need to make sure the `code` executable is in your path. Vscode has a
-command to easily do this.
+First, you need to make sure the `code` executable is in your path. Vscode has a  
+command to easily do this.  
 
-Step 1: Press `cmd+shift+p` to open the Command Palette
-Step 2: Search for the command "Shell Command: Install 'code' command to PATH" and execute it
-Step 3: Run the following in a terminal:
+Step 1: Press `cmd+shift+p` to open the Command Palette  
+Step 2: Search for the command "Shell Command: Install 'code' command to PATH" and execute it  
+Step 3: Run the following in a terminal:  
 ```
 git clone https://github.com/jackson-dean/ember-goto.git && cd ember-goto && code --install-extension ember-goto-0.0.1.vsix
 ```
 
-After installation you can reload or start a new instance of vscode. To confirm the plugin is loaded,
-you can right click in any editor and there should be a new option, "Ember: Go To File"
+After installation you can reload or start a new instance of vscode. To confirm the plugin is loaded,  
+you can right click in any editor and there should be a new option, "Ember: Go To File"  
 
-Don't forget to set the config options for the folders that should be considered for resolving modules.
+Don't forget to set the config options for the folders that should be considered for resolving modules.  
