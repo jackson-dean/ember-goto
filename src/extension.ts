@@ -3,10 +3,11 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { existsSync } from 'fs';
+import * as path from 'path';
+import findRelatedFilesForCurrentPath from './utils/find-related-files-for-current-path';
 
 const fileNameRegex = /^[a-zA-Z0-9-_./]+$/;
 const stringTerminatorRegex = /['"]/;
-const pathSeparator = '/';
 
 // TODO: investigate if we can allow a regex in config to specify how to inject the segments?
 const injectPathSegments = [
@@ -15,7 +16,36 @@ const injectPathSegments = [
 ];
 
 export function activate(context: vscode.ExtensionContext) {
-    let disposable = vscode.commands.registerCommand('extension.emberGoTo', () => {
+    let emberGoToRelatedFile = vscode.commands.registerCommand('extension.emberGoToRelatedFile', () => {
+        const { activeTextEditor } = vscode.window;
+        if (activeTextEditor) {
+            const workspaceRoot = vscode.workspace.rootPath || '';
+            const relativePath = vscode.workspace.asRelativePath(activeTextEditor.document.fileName);
+            const relatedFiles = findRelatedFilesForCurrentPath(workspaceRoot, relativePath);
+
+            if (!relatedFiles) {
+                vscode.window.showWarningMessage('Sorry, no related files found');
+                return;
+            }
+
+            vscode.window.showQuickPick(relatedFiles).then(selectedItem => {
+                if (!selectedItem) {
+                    return;
+                }
+                const absolutePath = selectedItem.getAbsolutePath();
+                vscode.workspace.openTextDocument(absolutePath).then(textDocument => {
+                    const visibleEditor = vscode.window.visibleTextEditors.find(visibleEditor => {
+                        return visibleEditor.document.uri.path === absolutePath;
+                    });
+                    const columnBeside = -2;
+                    const viewColumn = (visibleEditor && visibleEditor.viewColumn) || columnBeside;
+                    vscode.window.showTextDocument(textDocument, viewColumn);
+                });
+            });
+        }
+    });
+
+    let emberGoToFileUnderCursor = vscode.commands.registerCommand('extension.emberGoToFileUnderCursor', () => {
         const { activeTextEditor } = vscode.window;
         if (activeTextEditor) {
             const { line: currentCursorLineNumber, character: currentCursorColumnNumber } = activeTextEditor.selection.active;
@@ -40,7 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
                                 [`${cleanSearchDir}/${currentBaseFileName}`]: existingFileCandidate
                             }];
                         } else if (isHbsFile(existingFileCandidate)) {
-                            const reexportPath = existingFileCandidate.replace('/templates/', pathSeparator).replace('.hbs', '.js');
+                            const reexportPath = existingFileCandidate.replace('/templates/', path.sep).replace('.hbs', '.js');
                             // if a template file doesn't exist, it could be a case of re-exporting a template from js
                             if (existsSync(reexportPath)) {
                                 return [...existingUnderSearchSrc, {
@@ -76,7 +106,7 @@ export function activate(context: vscode.ExtensionContext) {
                 const displayName: string = (<any>file)[fileKey];
 
                 vscode.workspace.openTextDocument(displayName).then(textDocument => {
-                    vscode.window.showTextDocument(textDocument);
+                    vscode.window.showTextDocument(textDocument, vscode.ViewColumn.Active);
                 });
                 return;
             }
@@ -98,14 +128,15 @@ export function activate(context: vscode.ExtensionContext) {
                 const realFileName: string = (<any>fileToOpen)[pickedFile] || '';
 
                 vscode.workspace.openTextDocument(realFileName).then(textDocument => {
-                    vscode.window.showTextDocument(textDocument);
+                    // -1 means open in active editor window
+                    vscode.window.showTextDocument(textDocument, -1);
                 });
             });
 
         }
     });
 
-    context.subscriptions.push(disposable);
+    context.subscriptions.push(emberGoToFileUnderCursor, emberGoToRelatedFile);
 }
 
 function getFileExtension(fileName: string): string {
@@ -171,7 +202,7 @@ function getComponentNameUnderCursor(currentLine: string, cursorIdx: number): st
     const fileNameEnd = textAfterCursor.substring(0, endOfComponentNameIdx);
 
     // NOTE: the replace handles the case were the cursor was on a closing curly "tag"
-    return fileNameStart.concat(fileNameEnd).replace(/^\/|}+$/g, '');;
+    return fileNameStart.concat(fileNameEnd).replace(/^\/|}+$/g, '');
 }
 
 function convertComponentNameToModuleName(componentName: string, currentFileName: string): string {
@@ -179,7 +210,7 @@ function convertComponentNameToModuleName(componentName: string, currentFileName
     // strip namespace if it exists
     const cleanComponentName = componentName.replace(/^.*::/, '');
     // NOTE: should this also consider js only components?
-    return `${namespace}${pathSeparator}templates${pathSeparator}components${pathSeparator}${cleanComponentName}`;
+    return `${namespace}${path.sep}templates${path.sep}components${path.sep}${cleanComponentName}`;
 }
 
 function getComponentNameSpace(componentName: string, fileName: string): string {
@@ -189,7 +220,7 @@ function getComponentNameSpace(componentName: string, fileName: string): string 
         return componentName.split('::')[0];
     }
 
-    const fileNameParts = fileName.split(pathSeparator);
+    const fileNameParts = fileName.split(path.sep);
     for (let i = fileNameParts.length - 1; i > 0; i--) {
         if (/addon/.test(fileNameParts[i])) {
             return fileNameParts[i - 1];
@@ -201,10 +232,10 @@ function getComponentNameSpace(componentName: string, fileName: string): string 
 
 function getBaseFileNameCandidates(injectPathSegments: Array<string>, moduleName: string): Array<string> {
     return injectPathSegments.map(segment => {
-        const [namespace, ...rest] = moduleName.split(pathSeparator);
+        const [namespace, ...rest] = moduleName.split(path.sep);
         // NOTE: We remove test-support so we can properly inject the real location which is "addon-test-support"
-        const cleanRest = rest.join(pathSeparator).replace('test-support', '');
-        return `${namespace}${pathSeparator}${segment}${pathSeparator}${cleanRest}`;
+        const cleanRest = rest.join(path.sep).replace('test-support', '');
+        return `${namespace}${path.sep}${segment}${path.sep}${cleanRest}`;
     });
 }
 

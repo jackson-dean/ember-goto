@@ -15,25 +15,29 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:extension.emberGoTo"
+        "onCommand:extension.emberGoToFileUnderCursor",
+        "onCommand:extension.emberGoToRelatedFile"
     ],
     "main": "./out/extension",
     "contributes": {
         "commands": [{
-            "command": "extension.emberGoTo",
+            "command": "extension.emberGoToFileUnderCursor",
             "title": "Ember: Go To File"
+        }, {
+            "command": "extension.emberGoToRelatedFile",
+            "title": "Ember: Go To Related"
         }],
         "menus": {
             "editor/context": [{
-                "command": "extension.emberGoTo",
+                "command": "extension.emberGoToFileUnderCursor",
                 "group": "navigation"
-            }]
+            },
+            {
+                "command": "extension.emberGoToRelatedFile",
+                "group": "navigation"
+            }
+        ]
         },
-        "keybindings": [{
-            "command": "extension.emberGoTo",
-            "key": "ctrl+g ctrl+t",
-            "mac": "cmd+g cmd+t"
-        }],
         "configuration": {
             "type": "object",
             "title": "Ember Go To Configuration",
