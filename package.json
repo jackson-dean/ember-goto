@@ -15,24 +15,17 @@
         "Other"
     ],
     "activationEvents": [
-        "onCommand:extension.emberGoToFileUnderCursor",
+        "onCommand:editor.action.goToDeclaration",
         "onCommand:extension.emberGoToRelatedFile"
     ],
     "main": "./out/extension",
     "contributes": {
         "commands": [{
-            "command": "extension.emberGoToFileUnderCursor",
-            "title": "Ember: Go To File"
-        }, {
             "command": "extension.emberGoToRelatedFile",
-            "title": "Ember: Go To Related"
+            "title": "Related Files"
         }],
         "menus": {
             "editor/context": [{
-                "command": "extension.emberGoToFileUnderCursor",
-                "group": "navigation"
-            },
-            {
                 "command": "extension.emberGoToRelatedFile",
                 "group": "navigation"
             }

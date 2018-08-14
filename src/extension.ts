@@ -44,8 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
             });
         }
     });
-
-    let emberGoToFileUnderCursor = vscode.commands.registerCommand('extension.emberGoToFileUnderCursor', () => {
+    let emberGoToFileUnderCursor = vscode.commands.registerCommand('editor.action.goToDeclaration', () => {
         const { activeTextEditor } = vscode.window;
         if (activeTextEditor) {
             const { line: currentCursorLineNumber, character: currentCursorColumnNumber } = activeTextEditor.selection.active;
