@@ -15,11 +15,17 @@ const injectPathSegments = [
     'addon-test-support'
 ];
 
+function normalizeRootPath(rootPath: string = ''): string {
+    const regex = new RegExp(`${path.sep}$`);
+    const trimmed = rootPath.replace(regex, '');
+    return `${trimmed}${path.sep}`;
+}
+
 export function activate(context: vscode.ExtensionContext) {
     let emberGoToRelatedFile = vscode.commands.registerCommand('extension.emberGoToRelatedFile', () => {
         const { activeTextEditor } = vscode.window;
         if (activeTextEditor) {
-            const workspaceRoot = vscode.workspace.rootPath || '';
+            const workspaceRoot = normalizeRootPath(vscode.workspace.rootPath);
             const relativePath = vscode.workspace.asRelativePath(activeTextEditor.document.fileName);
             const relatedFiles = findRelatedFilesForCurrentPath(workspaceRoot, relativePath);
 
@@ -45,6 +51,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
     let emberGoToFileUnderCursor = vscode.commands.registerCommand('editor.action.goToDeclaration', () => {
+        // TODO: figure out how to handle relative paths
+        // TODO: fallback to using the `app` folder if namespaced file doesn't exist
         const { activeTextEditor } = vscode.window;
         if (activeTextEditor) {
             const { line: currentCursorLineNumber, character: currentCursorColumnNumber } = activeTextEditor.selection.active;
@@ -52,7 +60,6 @@ export function activate(context: vscode.ExtensionContext) {
             const currentFileName = activeTextEditor.document.fileName;
             let existingFiles: Object[] = [];
             const maybeModuleName = transformNamespaceAlias(getModuleNameUnderCursor(currentFileName, lineOfTextAtCursor, currentCursorColumnNumber));
-
             if (isValidModuleName(maybeModuleName) && isNamespacedModule(maybeModuleName)) {
                 const { searchSources, projectRoot } = vscode.workspace.getConfiguration("ember-goto");
                 const workspaceRootPath = projectRoot || vscode.workspace.rootPath || '';
