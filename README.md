@@ -77,6 +77,5 @@ git clone https://github.com/jackson-dean/ember-goto.git && cd ember-goto && cod
 ```
 
 After installation you can reload or start a new instance of vscode. To confirm the plugin is loaded,
-you can right click in any editor and there should be a new option, "Ember: Go To File"
-
-Don't forget to set the config options for the folders that should be considered for resolving modules.
+you can right click in any editor and there should be a new option, "Related Files", and a new command
+in the command palette of the same name. 
