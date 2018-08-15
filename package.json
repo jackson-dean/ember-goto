@@ -40,10 +40,39 @@
                     "default": "",
                     "description": "Absolute path to the project root"
                 },
-                "ember-goto.searchSources": {
+                "ember-goto.extraAddonSources": {
                     "type": "array",
-                    "default": [],
+                    "default": [
+                        "engine-lib",
+		                "core/engines",
+                        "extended/engines",
+                        "extended/lib",
+                        "core/lib",
+                        "lib",
+                        "node_modules",
+                        "node_modules/@linkedin"
+                    ],
                     "description": "List of project specific search directories relative to the project root"
+                },
+                "ember-goto.appHosts": {
+                    "type": "array",
+                    "default": [
+		                "core",
+                        "extended"
+                    ],
+                    "description": "List of directories which could contain independent ember applications"
+                },
+                "ember-goto.appNamespace": {
+                    "type": "string",
+                    "default": "gryphon-fe",
+                    "description": "The name of the host application"
+                },
+                "ember-goto.addonNameAliases": {
+                    "type": "object",
+                    "default": {
+                        "shared": "s-base"
+                    },
+                    "description": "Map of addon names to addon folder names. Only necessary if these two do not match."
                 }
             }
         }
