@@ -56,7 +56,7 @@ Additionally, if your project has addons with names different from the directory
 name on the file system, that can be configured with "ember-goto.addonNameAliases":
 ```
 	"ember-goto.addNameAliases": {
-		"name-on-disk": "name-in-package.json"
+		"name-in-package.json": "name-on-disk"
 	}
 ```
 
