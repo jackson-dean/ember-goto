@@ -56,7 +56,6 @@
         },
         "ember-goto.appNamespace": {
           "type": "string",
-          "default": "gryphone-fe",
           "description": "The name of the host application"
         },
         "ember-goto.addonNameAliases": {
