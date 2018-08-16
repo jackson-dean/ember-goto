@@ -80,7 +80,6 @@
     "@types/mocha": "^2.2.42"
   },
   "dependencies": {
-    "@types/acorn": "^4.0.3",
-    "acorn": "^5.7.1"
+    "typescript": "^2.6.1"
   }
 }
