@@ -5,13 +5,14 @@ import * as vscode from 'vscode';
 import { existsSync } from 'fs';
 import * as path from 'path';
 import findRelatedFilesForCurrentPath from './utils/find-related-files-for-current-path';
+import { createSourceFile, ScriptTarget } from 'typescript';
 
+// this is naive regex for variable name. let's see how much mileage it gets
+const invalidVarCharacterRegex = /[^[$a-zA-Z0-9-_]/;
 const sep = path.sep;
 
-const stringTerminatorRegex = /['"]/;
-
 export function activate(context: vscode.ExtensionContext) {
-    let emberGoToRelatedFile = vscode.commands.registerCommand('extension.emberGoToRelatedFile', () => {
+    let emberGoToRelatedFile = vscode.commands.registerCommand('extension.findRelatedFiles', () => {
         const { activeTextEditor } = vscode.window;
         if (activeTextEditor) {
             const workspaceRoot = normalizeTrailingSlash(vscode.workspace.rootPath);
@@ -40,25 +41,48 @@ export function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    let emberGoToFileUnderCursor = vscode.commands.registerCommand('editor.action.goToDeclaration', () => {
-        // TODO: figure out how to handle relative paths
-        const { activeTextEditor } = vscode.window;
-        if (activeTextEditor) {
+    class EmberDefinitionProvider implements vscode.DefinitionProvider {
+        public provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Thenable<vscode.Location[]>|Thenable<null> {
+            // TODO: clean this up. it is a mess.
+            const ast = createSourceFile(document.fileName, document.getText(), ScriptTarget.Latest);
+            const symbolUnderCursor = getModuleNameUnderCursor(document.fileName, document.lineAt(position.line).text, position.character);
+            let astBaseModuleName = symbolUnderCursor;
+
+            // if its a javascript file, we need to parse the import statements to extract the path to the module
+            if (path.extname(document.fileName) === '.js') {
+                ast.statements.find((statement: any)  => {
+                    if (statement.importClause && statement.importClause.namedBindings) {
+                        return statement.importClause.namedBindings.elements.find((element: any) => {
+                            if (element.name && element.name.text === symbolUnderCursor) {
+                                astBaseModuleName = statement.moduleSpecifier.text;
+                                return true;
+                            }
+                        });
+                    } else if (statement.importClause && statement.importClause.name && statement.importClause.name.text === symbolUnderCursor) {
+                        astBaseModuleName = statement.moduleSpecifier.text;
+                        return true;
+                    }
+                });
+            }
+
+            // TODO: do better regex with path separators for this
+            if (/templates/.test(astBaseModuleName)) {
+                astBaseModuleName = `${astBaseModuleName}.hbs`;
+            } else {
+                astBaseModuleName = `${astBaseModuleName}.js`;
+            }
+
             const { projectRoot, extraAddonSources, addonNameAliases, appNamespace, appHosts = [] } = vscode.workspace.getConfiguration("ember-goto");
             const workspaceRoot = normalizeTrailingSlash(projectRoot || vscode.workspace.rootPath);
-            const { line, character } = activeTextEditor.selection.active;
-            const lineOfTextAtCursor = activeTextEditor.document.lineAt(line).text;
-            const currentFileName = activeTextEditor.document.fileName;
+            const currentFileName = document.fileName;
             const currentFileNamespace = (currentFileName.split(new RegExp(`${sep}addon${sep}|${sep}app${sep}`)).shift() || '').split(sep).pop();
-            const namespacedModuleName = getModuleNameUnderCursor(currentFileName, lineOfTextAtCursor, character);
-            const addonNamespace = transformNamespaceAlias(namespacedModuleName, addonNameAliases);
-            const baseModuleName = namespacedModuleName.split(sep).slice(1).join(sep);
-
+            const addonNamespace = transformNamespaceAlias(astBaseModuleName, addonNameAliases);
+            const baseModuleName = astBaseModuleName.split(sep).slice(1).join(sep);
             let moduleCandidates = [baseModuleName];
 
             // A template file could mean a re-export or possibly a template helper,
             // so we add those possibilities to the file candidates to check for existence
-            if (isTemplateFile(baseModuleName)) {
+            if (path.extname(baseModuleName) === '.hbs') {
                 const convertedToJsModule = baseModuleName.replace('.hbs', '.js');
                 const helperCandidate = convertedToJsModule.replace(`templates${sep}components${sep}`, `helpers${sep}`);
                 const componentReExportCandidate = convertedToJsModule.replace(`templates${sep}components${sep}`, `components${sep}`);
@@ -96,57 +120,30 @@ export function activate(context: vscode.ExtensionContext) {
             });
 
             // filter down to files that actually exist on the file system
+            // TODO: do this asynchronously
             const existingFiles = absolutePathCandidates.filter(existsSync);
 
-            // show a warning if no file was found
             if (!existingFiles.length) {
-                vscode.window.showWarningMessage(`Could not locatate ${addonNamespace || currentFileNamespace}${sep}${baseModuleName} - Maybe it has a missing or incorrect a namespace.`);
+                return Promise.resolve(null);
             }
 
-            // if only one file exists, jump there immediately
-            if (existingFiles.length === 1) {
-                const uri = existingFiles[0];
-                vscode.workspace.openTextDocument(uri).then(textDocument => {
-                    const visibleEditor = vscode.window.visibleTextEditors.find(visibleEditor => {
-                        return visibleEditor.document.uri.path === uri;
-                    });
-                    const columnBeside = -2;
-                    const viewColumn = (visibleEditor && visibleEditor.viewColumn) || columnBeside;
-                    vscode.window.showTextDocument(textDocument, viewColumn);
-                    vscode.window.showTextDocument(textDocument, vscode.ViewColumn.Active);
-                });
-                return;
-            }
-
-            const quickPickItems = existingFiles.map(detail => {
-                return {
-                    description: detail.replace(workspaceRoot, ''),
-                    label: `${isJavascriptFile(detail) ? 'JavaScript' : 'Template'}: `,
-                    getUri() {
-                        return detail;
-                    }
-                };
+            const locations: vscode.Location[] = [];
+            existingFiles.forEach(existingFile => {
+                const file = vscode.Uri.file(existingFile);
+                const pos = new vscode.Position(0, 0);
+                const location = new vscode.Location(file, pos);
+                locations.push(location);
             });
 
-            // for multiple results, just show a list and let the user choose
-            vscode.window.showQuickPick(quickPickItems).then(selection => {
-                if (!selection) {
-                    return;
-                }
-                const uri = selection.getUri();
-                vscode.workspace.openTextDocument(uri).then(textDocument => {
-                    const visibleEditor = vscode.window.visibleTextEditors.find(visibleEditor => {
-                        return visibleEditor.document.uri.path === uri;
-                    });
-                    const columnBeside = -2;
-                    const viewColumn = (visibleEditor && visibleEditor.viewColumn) || columnBeside;
-                    vscode.window.showTextDocument(textDocument, viewColumn);
-                });
-            });
+            return Promise.resolve(locations);
         }
-    });
+    }
+    context.subscriptions.push(vscode.languages.registerDefinitionProvider(
+        { scheme: 'file' },
+        new EmberDefinitionProvider()
+    ));
 
-    context.subscriptions.push(emberGoToFileUnderCursor, emberGoToRelatedFile);
+    context.subscriptions.push(emberGoToRelatedFile);
 }
 
 function normalizeTrailingSlash(rootPath: string = ''): string {
@@ -157,26 +154,27 @@ function normalizeTrailingSlash(rootPath: string = ''): string {
     return `${rootPath}${sep}`;
 }
 
+function transformNamespaceAlias(componentName: string, addonNameAliases: any) {
+    const segments = componentName.split(sep);
+    const namespace = segments[0];
+    const namespaceAlias = addonNameAliases[namespace];
 
-function isJavascriptFile(fileName: string): boolean {
-    return path.extname(fileName) === '.js';
-}
+    if (namespaceAlias) {
+        return namespaceAlias;
+    }
 
-function isTemplateFile(fileName: string): boolean {
-    return path.extname(fileName) === '.hbs';
+    return namespace;
 }
 
 function getModuleNameUnderCursor(fileName: string, textLine: string, cursorPosition: number): string {
     let result = '';
-    if (isTemplateFile(fileName)) {
+    if (path.extname(fileName) === '.hbs') {
         const componentNameUnderCursor = getComponentNameUnderCursor(textLine, cursorPosition);
-        result = convertComponentNameToModuleName(componentNameUnderCursor, fileName).concat('.hbs');
+        result = convertComponentNameToModuleName(componentNameUnderCursor, fileName);
     }
 
-    if (isJavascriptFile(fileName)) {
-        const moduleName = convertImportStringToModuleName(textLine, cursorPosition);
-        const isTemplateImport = moduleName.includes(`${sep}templates${sep}`);
-        result = isTemplateImport ? moduleName.concat('.hbs') : moduleName.concat('.js');
+    if (path.extname(fileName) === '.js') {
+        return convertImportStringToModuleName(textLine, cursorPosition);
     }
 
     return result;
@@ -185,9 +183,9 @@ function getModuleNameUnderCursor(fileName: string, textLine: string, cursorPosi
 function convertImportStringToModuleName(currentLine: string, cursorIdx: number): string {
     const textAfterCursor = currentLine.substring(cursorIdx);
     const textBeforeCursor = currentLine.substring(0, cursorIdx);
-    const endOfFileNameIdx = textAfterCursor.search(stringTerminatorRegex);
+    const endOfFileNameIdx = textAfterCursor.search(invalidVarCharacterRegex);
     const reversedSegment = textBeforeCursor.split('').reverse().join('');
-    const startOfFileNameIdx = reversedSegment.search(stringTerminatorRegex);
+    const startOfFileNameIdx = reversedSegment.search(invalidVarCharacterRegex);
     const fileNameStart = reversedSegment.substring(0, startOfFileNameIdx).split('').reverse().join('');
     const fileNameEnd = textAfterCursor.substring(0, endOfFileNameIdx);
 
@@ -232,19 +230,6 @@ function getComponentNameSpace(componentName: string, fileName: string): string 
 
     return '';
 }
-
-function transformNamespaceAlias(componentName: string, addonNameAliases: any) {
-    const segments = componentName.split(sep);
-    const namespace = segments[0];
-    const namespaceAlias = addonNameAliases[namespace];
-
-    if (namespaceAlias) {
-        return namespaceAlias;
-    }
-
-    return namespace;
-}
-
 // this method is called when your extension is deactivated
 export function deactivate() {
 }

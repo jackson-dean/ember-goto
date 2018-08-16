@@ -1,79 +1,87 @@
 {
-    "name": "ember-goto",
-    "displayName": "ember-goto",
-    "description": "Easily navigate an ember codebase in Visual Studio Code",
-    "version": "0.0.1",
-    "publisher": "jxson",
-    "engines": {
-        "vscode": "^1.24.0"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/jackson-dean/ember-goto.git"
-    },
-    "categories": [
-        "Other"
+  "name": "ember-goto",
+  "displayName": "ember-goto",
+  "description": "Easily navigate an ember codebase in Visual Studio Code",
+  "version": "0.0.1",
+  "publisher": "jxson",
+  "engines": {
+    "vscode": "^1.24.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jackson-dean/ember-goto.git"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:editor.action.goToDeclaration",
+    "onCommand:extension.findRelatedFiles"
+  ],
+  "main": "./out/extension",
+  "contributes": {
+    "commands": [
+      {
+        "command": "extension.findRelatedFiles",
+        "title": "Ember: Related Files"
+      }
     ],
-    "activationEvents": [
-        "onCommand:editor.action.goToDeclaration",
-        "onCommand:extension.emberGoToRelatedFile"
-    ],
-    "main": "./out/extension",
-    "contributes": {
-        "commands": [{
-            "command": "extension.emberGoToRelatedFile",
-            "title": "Related Files"
-        }],
-        "menus": {
-            "editor/context": [{
-                "command": "extension.emberGoToRelatedFile",
-                "group": "navigation"
-            }
-        ]
-        },
-        "configuration": {
-            "type": "object",
-            "title": "Ember Go To Configuration",
-            "properties": {
-                "ember-goto.projectRoot": {
-                    "type": "string",
-                    "description": "Absolute path to the project root"
-                },
-                "ember-goto.extraAddonSources": {
-                    "type": "array",
-                    "default": [
-                        "lib",
-                        "node_modules"
-                    ],
-                    "description": "List of project specific search directories relative to the project root"
-                },
-                "ember-goto.appHosts": {
-                    "type": "array",
-                    "description": "List of directories which could contain independent ember applications"
-                },
-                "ember-goto.appNamespace": {
-                    "type": "string",
-                    "description": "The name of the host application"
-                },
-                "ember-goto.addonNameAliases": {
-                    "type": "object",
-                    "description": "Map of addon names to addon folder names. Only necessary if these two do not match."
-                }
-            }
+    "menus": {
+      "editor/context": [
+        {
+          "command": "extension.findRelatedFiles",
+          "group": "navigation"
         }
+      ]
     },
-    "scripts": {
-        "vscode:prepublish": "npm run compile",
-        "compile": "tsc -p ./",
-        "watch": "tsc -watch -p ./",
-        "postinstall": "node ./node_modules/vscode/bin/install",
-        "test": "npm run compile && node ./node_modules/vscode/bin/test"
-    },
-    "devDependencies": {
-        "typescript": "^2.6.1",
-        "vscode": "^1.1.6",
-        "tslint": "^5.8.0",
-        "@types/node": "^7.0.43",
-        "@types/mocha": "^2.2.42"
+    "configuration": {
+      "type": "object",
+      "title": "Ember Go To Configuration",
+      "properties": {
+        "ember-goto.projectRoot": {
+          "type": "string",
+          "description": "Absolute path to the project root"
+        },
+        "ember-goto.extraAddonSources": {
+          "type": "array",
+          "default": [
+            "lib",
+            "node_modules"
+          ],
+          "description": "List of project specific search directories relative to the project root"
+        },
+        "ember-goto.appHosts": {
+          "type": "array",
+          "description": "List of directories which could contain independent ember applications"
+        },
+        "ember-goto.appNamespace": {
+          "type": "string",
+          "default": "gryphone-fe",
+          "description": "The name of the host application"
+        },
+        "ember-goto.addonNameAliases": {
+          "type": "object",
+          "description": "Map of addon names to addon folder names. Only necessary if these two do not match."
+        }
+      }
     }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "postinstall": "node ./node_modules/vscode/bin/install",
+    "test": "npm run compile && node ./node_modules/vscode/bin/test"
+  },
+  "devDependencies": {
+    "typescript": "^2.6.1",
+    "vscode": "^1.1.6",
+    "tslint": "^5.8.0",
+    "@types/node": "^7.0.43",
+    "@types/mocha": "^2.2.42"
+  },
+  "dependencies": {
+    "@types/acorn": "^4.0.3",
+    "acorn": "^5.7.1"
+  }
 }
