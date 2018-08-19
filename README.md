@@ -25,7 +25,7 @@ provide additional sources under the config key
 
 Example config for non-conventional directories:
 ```
-	"ember-goto.searchSources": [
+	"ember-goto.extraAddonSources": [
 		"engines",
 	]
 ```
@@ -34,9 +34,7 @@ If modules are imported using the application namespace, you must provide the
 name of the application via the config "ember-goto.appNamespace". This is the
 same as the name key found in the package.json for your top level ember app:
 ```
-	"ember-goto.appNamespace": [
-		"your-app-name"
-	]
+	"ember-goto.appNamespace": "your-app-name"
 ```
 
 If your project has addons with names different from the directory
