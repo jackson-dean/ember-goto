@@ -1,6 +1,6 @@
 {
   "name": "ember-goto",
-  "displayName": "ember-goto",
+  "displayName": "Ember Go To",
   "description": "Easily navigate an ember codebase in Visual Studio Code",
   "version": "0.0.1",
   "publisher": "jxson",
