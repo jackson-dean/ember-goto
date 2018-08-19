@@ -2,7 +2,7 @@
   "name": "ember-goto",
   "displayName": "Ember Go To",
   "description": "Easily navigate an ember codebase in Visual Studio Code",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "jxson",
   "engines": {
     "vscode": "^1.24.0"
