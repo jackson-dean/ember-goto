@@ -1,13 +1,15 @@
 "use strict";
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import { existsSync } from "fs";
 import * as path from "path";
 import findRelatedFilesForCurrentPath from "./utils/find-related-files-for-current-path";
 import { createSourceFile, ScriptTarget } from "typescript";
+import { buildPaths } from 'ember-module-path-builder';
 
 // this is naive regex for variable name. let's see how much mileage it gets
+const COMPONENT_TEMPLATE_MODULE_REGEX = new RegExp(
+  `^${path.sep}?templates${path.sep}components${path.sep}`
+);
 const invalidVarCharacterRegex = /[^[$a-zA-Z0-9-_]/;
 const sep = path.sep;
 
@@ -58,27 +60,43 @@ export function activate(context: vscode.ExtensionContext) {
       position: vscode.Position,
       token: vscode.CancellationToken
     ): Thenable<vscode.Location[]> | Thenable<null> {
-      // TODO: clean this up. it is a mess.
-      const ast = createSourceFile(
-        document.fileName,
-        document.getText(),
-        ScriptTarget.Latest
+      const currentFileName = document.fileName;
+      const currentFileExtension = path.extname(currentFileName);
+      const textLineUnderCursor = document.lineAt(position.line).text;
+      const currentColumnPosition = position.character;
+      const currentFileFullText = document.getText();
+      const {
+        projectRoot,
+        extraAddonSources,
+        addonNameAliases,
+        appNamespace,
+      } = vscode.workspace.getConfiguration("ember-goto");
+      const normalizedProjectRoot = normalizeTrailingSlash(
+        projectRoot || vscode.workspace.rootPath
       );
-      const symbolUnderCursor = getModuleNameUnderCursor(
-        document.fileName,
-        document.lineAt(position.line).text,
-        position.character
-      );
-      let astBaseModuleName = symbolUnderCursor;
+
+      let symbolUnderCursor = '';
+      let baseModuleName = '';
+      let absolutePathCandidates: string[] = [];
 
       // if its a javascript file, we need to parse the import statements to extract the path to the module
-      if (path.extname(document.fileName) === ".js") {
+      if (currentFileExtension === ".js") {
+        const ast = createSourceFile(
+          currentFileName,
+          currentFileFullText,
+          ScriptTarget.Latest
+        );
+        symbolUnderCursor = getModuleNameUnderCursor(
+          currentFileName,
+          textLineUnderCursor,
+          currentColumnPosition
+        );
         ast.statements.find((statement: any) => {
           if (statement.importClause && statement.importClause.namedBindings) {
             return statement.importClause.namedBindings.elements.find(
               (element: any) => {
                 if (element.name && element.name.text === symbolUnderCursor) {
-                  astBaseModuleName = statement.moduleSpecifier.text;
+                  baseModuleName = statement.moduleSpecifier.text;
                   return true;
                 }
               }
@@ -88,111 +106,47 @@ export function activate(context: vscode.ExtensionContext) {
             statement.importClause.name &&
             statement.importClause.name.text === symbolUnderCursor
           ) {
-            astBaseModuleName = statement.moduleSpecifier.text;
+            baseModuleName = statement.moduleSpecifier.text;
             return true;
           }
         });
-      }
 
-      // TODO: do better regex with path separators for this
-      if (/templates/.test(astBaseModuleName)) {
-        astBaseModuleName = `${astBaseModuleName}.hbs`;
-      } else {
-        astBaseModuleName = `${astBaseModuleName}.js`;
-      }
+        const baseModuleNameSegments = baseModuleName.split(path.sep);
+        let addonNamespace = '';
+        if (baseModuleName.startsWith('.')) {
+          // if it is a relative path, just the let the editor try to figure it out
+          return Promise.resolve(null);
+        } else {
+          addonNamespace = addonNameAliases[baseModuleNameSegments[0]] || baseModuleNameSegments[0];
+        }
 
-      const {
-        projectRoot,
-        extraAddonSources,
-        addonNameAliases,
-        appNamespace,
-        appHosts = []
-      } = vscode.workspace.getConfiguration("ember-goto");
-      const workspaceRoot = normalizeTrailingSlash(
-        projectRoot || vscode.workspace.rootPath
-      );
-      const currentFileName = document.fileName;
-      const currentFileNamespace = (
-        currentFileName
-          .split(new RegExp(`${sep}addon${sep}|${sep}app${sep}`))
-          .shift() || ""
-      )
-        .split(sep)
-        .pop();
-      const addonNamespace = transformNamespaceAlias(
-        astBaseModuleName,
-        addonNameAliases
-      );
-      const baseModuleName = astBaseModuleName
-        .split(sep)
-        .slice(1)
-        .join(sep);
-      let moduleCandidates = [baseModuleName];
-
-      // A template file could mean a re-export or possibly a template helper,
-      // so we add those possibilities to the file candidates to check for existence
-      if (path.extname(baseModuleName) === ".hbs") {
-        const convertedToJsModule = baseModuleName.replace(".hbs", ".js");
-        const helperCandidate = convertedToJsModule.replace(
-          `templates${sep}components${sep}`,
-          `helpers${sep}`
+        baseModuleName = path.join(...baseModuleNameSegments.slice(1));
+        absolutePathCandidates = buildPaths(normalizedProjectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
+      } else if (currentFileExtension === '.hbs') {
+        // this means "Go to definition" was invoked in a template, so we must
+        // be searching for either a component or a helper file
+        const componentNameUnderCursor = getComponentNameUnderCursor(
+          textLineUnderCursor,
+          currentColumnPosition
         );
-        const componentReExportCandidate = convertedToJsModule.replace(
-          `templates${sep}components${sep}`,
-          `components${sep}`
+        let addonNamespace = getComponentNameSpace(componentNameUnderCursor, currentFileName) || appNamespace;
+        addonNamespace = addonNameAliases[addonNamespace] || addonNamespace;
+        baseModuleName = convertComponentNameToModuleName(
+          componentNameUnderCursor,
+          currentFileName
         );
-        moduleCandidates = moduleCandidates.concat([
-          convertedToJsModule,
-          helperCandidate,
-          componentReExportCandidate
-        ]);
+        absolutePathCandidates = buildPaths(normalizedProjectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
+        // It could be a template helper invocation, so we build helper paths as well
+        const templateHelperModuleName = baseModuleName.replace(COMPONENT_TEMPLATE_MODULE_REGEX, `helpers${path.sep}`);
+        const templateHelperPaths = buildPaths(normalizedProjectRoot, appNamespace, addonNamespace, templateHelperModuleName, extraAddonSources);
+        absolutePathCandidates = absolutePathCandidates.concat(templateHelperPaths);
       }
 
-      let absolutePathCandidates: Array<string> = [];
-
-      // The namespace could be the namespace for the application, so we
-      // take that into account by adding a candidate that might exist
-      // directly in the app folder if the parsed namespace matches the
-      // app namespace from the config
-      // TODO: also try looking up in current in repo addon if the namespace is empty
-      if (!addonNamespace || addonNamespace === appNamespace) {
-        absolutePathCandidates.push(
-          `${workspaceRoot}app${sep}${baseModuleName}`
-        );
-      }
-
-      // If there are multiple app hosts, we should take that into account as well
-      absolutePathCandidates = absolutePathCandidates.concat(
-        appHosts.map((host = "") => {
-          return `${workspaceRoot}${host}${sep}app${sep}${baseModuleName}`;
-        })
-      );
-
-      // construct all permutations of the possible existing file locations
-      moduleCandidates.forEach(moduleCandidate => {
-        extraAddonSources.forEach((addonSource = "") => {
-          if (addonNamespace) {
-            absolutePathCandidates.push(
-              `${workspaceRoot}${addonSource}${sep}${addonNamespace}${sep}addon${sep}${moduleCandidate}`
-            );
-            absolutePathCandidates.push(
-              `${workspaceRoot}${addonSource}${sep}${addonNamespace}${sep}addon-test-support${sep}${moduleCandidate}`
-            );
-            absolutePathCandidates.push(
-              `${workspaceRoot}${addonSource}${sep}${addonNamespace}${sep}app${sep}${moduleCandidate}`
-            );
-          } else {
-            // if we couldn't parse a namespace, it could mean there wasn't one, so let's just try the namespace for the current file
-            absolutePathCandidates.push(
-              `${workspaceRoot}${addonSource}${sep}${currentFileNamespace}${sep}app${sep}${moduleCandidate}`
-            );
-          }
-        });
-      });
-
-      // filter down to files that actually exist on the file system
-      // TODO: do this asynchronously
       const existingFiles = absolutePathCandidates.filter(existsSync);
+
+      if (!existingFiles.length) {
+        return Promise.resolve(null);
+      }
 
       const locations: vscode.Location[] = [];
       for (let i = 0; i < existingFiles.length; i++) {
@@ -257,18 +211,6 @@ function normalizeTrailingSlash(rootPath: string = ""): string {
   }
 
   return `${rootPath}${sep}`;
-}
-
-function transformNamespaceAlias(componentName: string, addonNameAliases: any) {
-  const segments = componentName.split(sep);
-  const namespace = segments[0];
-  const namespaceAlias = addonNameAliases[namespace];
-
-  if (namespaceAlias) {
-    return namespaceAlias;
-  }
-
-  return namespace;
 }
 
 function getModuleNameUnderCursor(
@@ -348,11 +290,9 @@ function convertComponentNameToModuleName(
   componentName: string,
   currentFileName: string
 ): string {
-  const namespace = getComponentNameSpace(componentName, currentFileName);
   // strip namespace if it exists
   const cleanComponentName = componentName.replace(/^.*::/, "");
-  // NOTE: should this also consider js only components?
-  return `${namespace}${sep}templates${sep}components${sep}${cleanComponentName}`;
+  return `templates${sep}components${sep}${cleanComponentName}`;
 }
 
 function getComponentNameSpace(

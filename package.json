@@ -26,14 +26,6 @@
         "title": "Ember: Related Files"
       }
     ],
-    "menus": {
-      "editor/context": [
-        {
-          "command": "extension.findRelatedFiles",
-          "group": "navigation"
-        }
-      ]
-    },
     "configuration": {
       "type": "object",
       "title": "Ember Go To Configuration",
@@ -80,6 +72,7 @@
     "@types/mocha": "^2.2.42"
   },
   "dependencies": {
+    "ember-module-path-builder": "^0.0.1",
     "typescript": "^2.6.1"
   }
 }

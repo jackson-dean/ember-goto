@@ -1,20 +1,19 @@
 # Ember Go To
 
-This is a WIP. Expect issues and please report them.
+This is a WIP.
 
-Makes 'Go to Definition' work for ember applications. Supports in-repo addons
-and engines. Relies on namespaced, absolute import paths. Also provides a
-"Related Files" feature which displays related files based on the current
-file, which is available via the context menu and a command in the command
-palette.
+Makes 'Go to Definition' work for ember applications with in-repo addons and
+for resolving modules from the node_modules directory. Relies on namespaced,
+absolute import paths. Also provides a "Related Files" feature which displays
+related files based on the current file, which is available via a command in
+the command palette.
 
 ## Features
 
-Right click over any import path string, or component invocation inside a template,
-and select "Go to Definition". Or use the default keybinding, "f12".
-
-Right click in any file and select "Related Files" or do the same from the
-command palette to reveal a list of related files.
+- "Go to Definition" for named and default imports in javascript files.
+- "Go to Definition" for component and helper invocations in templates.
+- "Related files" for navigating quickly betweeen js/hbs/test locations
+  depending on the current open file.
 
 ## Extension Settings
 
@@ -28,36 +27,30 @@ Example config for non-conventional directories:
 ```
 	"ember-goto.searchSources": [
 		"engines",
-		"node_modules/@namespace"
-	]
-```
-
-Additonal settings:
-
-If the repo contains multiple ember apps, you can provide those directories
-with the config "ember-goto.appHosts":
-```
-	"ember-goto.appHosts": [
-		"host1",
-		"host2"
 	]
 ```
 
 If modules are imported using the application namespace, you must provide the
 name of the application via the config "ember-goto.appNamespace". This is the
-same as the name key found in the package.json for your ember app:
+same as the name key found in the package.json for your top level ember app:
 ```
 	"ember-goto.appNamespace": [
 		"your-app-name"
 	]
 ```
 
-Additionally, if your project has addons with names different from the directory
+If your project has addons with names different from the directory
 name on the file system, that can be configured with "ember-goto.addonNameAliases":
 ```
 	"ember-goto.addNameAliases": {
 		"name-in-package.json": "name-on-disk"
 	}
+```
+
+If your ember app is nested in a subdirectory of your overall project. You must
+provide the absolute path to the ember app location:
+```
+	"ember-goto.projectRoot": "/Absolute/file/system/path/to/my-ember-app"
 ```
 
 ## Install
@@ -78,4 +71,4 @@ git clone https://github.com/jackson-dean/ember-goto.git && cd ember-goto && cod
 
 After installation you can reload or start a new instance of vscode. To confirm the plugin is loaded,
 you can right click in any editor and there should be a new option, "Related Files", and a new command
-in the command palette of the same name. 
+in the command palette of the same name.
