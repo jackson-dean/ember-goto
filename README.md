@@ -8,6 +8,9 @@ absolute import paths. Also provides a "Related Files" feature which displays
 related files based on the current file, which is available via a command in
 the command palette.
 
+Coming soon: auto creation of jsconfig.json based on project for more integrated
+experience
+
 ## Features
 
 - "Go to Definition" for named and default imports in javascript files.
