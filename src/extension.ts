@@ -1,6 +1,6 @@
 "use strict";
 import * as vscode from "vscode";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import * as path from "path";
 import findRelatedFilesForCurrentPath from "./utils/find-related-files-for-current-path";
 import { createSourceFile, ScriptTarget } from "typescript";
@@ -65,15 +65,25 @@ export function activate(context: vscode.ExtensionContext) {
       const textLineUnderCursor = document.lineAt(position.line).text;
       const currentColumnPosition = position.character;
       const currentFileFullText = document.getText();
-      const {
+      let {
         projectRoot,
         extraAddonSources,
         addonNameAliases,
         appNamespace,
       } = vscode.workspace.getConfiguration("ember-goto");
-      const normalizedProjectRoot = normalizeTrailingSlash(
-        projectRoot || vscode.workspace.rootPath
-      );
+
+      if (!projectRoot) {
+        projectRoot = vscode.workspace.rootPath;
+      }
+
+      let jsconfig;
+
+      try {
+        jsconfig = JSON.parse(readFileSync(path.join(projectRoot, 'jsconfig.json'), 'utf8'));
+      } catch(e) {
+        // show some message?
+        console.log(e);
+      }
 
       let symbolUnderCursor = '';
       let baseModuleName = '';
@@ -120,8 +130,15 @@ export function activate(context: vscode.ExtensionContext) {
           addonNamespace = addonNameAliases[baseModuleNameSegments[0]] || baseModuleNameSegments[0];
         }
 
+        if (jsconfig && jsconfig.compilerOptions && jsconfig.compilerOptions.paths) {
+          if (jsconfig.compilerOptions.paths[`${addonNamespace}/*`]) {
+            // don't conflict with jsconfig settings
+            return Promise.resolve(null);
+          }
+        }
+
         baseModuleName = path.join(...baseModuleNameSegments.slice(1));
-        absolutePathCandidates = buildPaths(normalizedProjectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
+        absolutePathCandidates = buildPaths(projectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
       } else if (currentFileExtension === '.hbs') {
         // this means "Go to definition" was invoked in a template, so we must
         // be searching for either a component or a helper file
@@ -135,10 +152,10 @@ export function activate(context: vscode.ExtensionContext) {
           componentNameUnderCursor,
           currentFileName
         );
-        absolutePathCandidates = buildPaths(normalizedProjectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
+        absolutePathCandidates = buildPaths(projectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
         // It could be a template helper invocation, so we build helper paths as well
         const templateHelperModuleName = baseModuleName.replace(COMPONENT_TEMPLATE_MODULE_REGEX, `helpers${path.sep}`);
-        const templateHelperPaths = buildPaths(normalizedProjectRoot, appNamespace, addonNamespace, templateHelperModuleName, extraAddonSources);
+        const templateHelperPaths = buildPaths(projectRoot, appNamespace, addonNamespace, templateHelperModuleName, extraAddonSources);
         absolutePathCandidates = absolutePathCandidates.concat(templateHelperPaths);
       }
 
