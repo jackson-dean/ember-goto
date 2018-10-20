@@ -53,6 +53,10 @@
         "ember-goto.addonNameAliases": {
           "type": "object",
           "description": "Map of addon names to addon folder names. Only necessary if these two do not match."
+        },
+        "ember-goto.jsConfigResolver": {
+          "type": "boolean",
+          "description": "Determines whether go to definition in a javascript file should be handled by jsconfig"
         }
       }
     }

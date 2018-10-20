@@ -1,6 +1,6 @@
 "use strict";
 import * as vscode from "vscode";
-import { existsSync, readFileSync } from "fs";
+import { existsSync } from "fs";
 import * as path from "path";
 import findRelatedFilesForCurrentPath from "./utils/find-related-files-for-current-path";
 import { createSourceFile, ScriptTarget } from "typescript";
@@ -70,19 +70,11 @@ export function activate(context: vscode.ExtensionContext) {
         extraAddonSources,
         addonNameAliases,
         appNamespace,
+        jsConfigResolver,
       } = vscode.workspace.getConfiguration("ember-goto");
 
       if (!projectRoot) {
         projectRoot = vscode.workspace.rootPath;
-      }
-
-      let jsconfig;
-
-      try {
-        jsconfig = JSON.parse(readFileSync(path.join(projectRoot, 'jsconfig.json'), 'utf8'));
-      } catch(e) {
-        // show some message?
-        console.log(e);
       }
 
       let symbolUnderCursor = '';
@@ -130,14 +122,12 @@ export function activate(context: vscode.ExtensionContext) {
           addonNamespace = addonNameAliases[baseModuleNameSegments[0]] || baseModuleNameSegments[0];
         }
 
-        if (jsconfig && jsconfig.compilerOptions && jsconfig.compilerOptions.paths) {
-          if (jsconfig.compilerOptions.paths[`${addonNamespace}/*`]) {
-            // don't conflict with jsconfig settings
-            return Promise.resolve(null);
-          }
-        }
-
         baseModuleName = path.join(...baseModuleNameSegments.slice(1));
+
+        if (jsConfigResolver && !baseModuleName.startsWith("templates")) {
+            // don't conflict with jsconfig settings for resolving javascript files
+            return Promise.resolve(null);
+        }
         absolutePathCandidates = buildPaths(projectRoot, appNamespace, addonNamespace, baseModuleName, extraAddonSources);
       } else if (currentFileExtension === '.hbs') {
         // this means "Go to definition" was invoked in a template, so we must
